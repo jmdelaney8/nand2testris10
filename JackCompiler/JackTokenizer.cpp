@@ -41,9 +41,12 @@ bool Tokenizer::nextIsSpace() {
   return c == ' ' || c == '\n' || c == '\t';
 }
 
+/*
+  Consumes comments and blanks before returning if next valid character exists.
+*/
 bool Tokenizer::hasMoreTokens() {
   int c = file.peek();
-  while (nextIsComment() || nextIsSpace()) {
+  while (nextIsSingleComment() || nextIsSpace() || nextIsMultiComment()) {
     // Ignore empty space
     while (c != EOF && nextIsSpace()) {
       c = file.get();
@@ -52,10 +55,20 @@ bool Tokenizer::hasMoreTokens() {
     if (c == EOF) {
       return false;
     }
-    // Ignore comments
-    while (c != EOF && nextIsComment()) {
+    // Ignore single line comments
+    while (c != EOF && nextIsSingleComment()) {
       char line[256];
       file.getline(line, 256);
+      c = file.peek();
+    }
+    // Ignore multi line comments
+    while (c != EOF && nextIsMultiComment()) {
+      char c0 = c;
+      char c1 = file.get();
+      while (c0 != '*' || c1 != '/') {
+        c0 = c1;
+        c1 = file.get();
+      }
       c = file.peek();
     }
   }
@@ -89,13 +102,23 @@ std::string Tokenizer::stringVal() {
   return token;
 }
 
-bool Tokenizer::nextIsComment() {
+bool Tokenizer::nextIsSingleComment() {
   int c = file.peek();
   if (c == '/') {
     file.get();
     c = file.peek();
     file.unget();
     if (c == '/') return true;
+  }
+  return false;
+}
+
+bool Tokenizer::nextIsMultiComment() {
+  int c = file.peek();
+  if (c == '/') {
+    file.get();
+    c = file.peek();
+    file.unget();
     if (c == '*') {
       c = file.get();
       c = file.get();
@@ -131,7 +154,10 @@ void Tokenizer::advance() {
   if (!isSymbol(c0)) {
     c = file.peek();
     // Read in multicharacter token
-    while (!isSymbol(c) && c != EOF && !nextIsSpace() && !Tokenizer::nextIsComment()) {
+    while (!isSymbol(c) && c != EOF && !nextIsSpace() 
+           && !Tokenizer::nextIsSingleComment()
+           && !Tokenizer::nextIsMultiComment())
+    {
       c = file.get();
       token.push_back(c);
       c = file.peek();

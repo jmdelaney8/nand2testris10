@@ -39,6 +39,7 @@ public:
   /*
     Checks if next characters in file are a comment or not. Does not remove comment.
   */
-  bool nextIsComment();
+  bool nextIsSingleComment();
+  bool nextIsMultiComment();
   bool nextIsSpace();
 };

@@ -27,14 +27,15 @@ int main(int argc, char* argv[]) {
   
   // Tokenize input files
   if (fs::is_directory(path)) {
-    // Create output file
-    fs::path outpath = path.parent_path() / path.stem().string().append("_test.xml");
-    outfile.open(outpath.string());
-
+    
     fs::directory_iterator path_iter(path);
     for (auto& p : path_iter) {
       if (p.is_regular_file() && ".jack" == p.path().extension()) {
+        // Create output file
+        fs::path outpath = path.parent_path() / path.stem() / p.path().stem().string().append("T_test.xml");
+        outfile.open(outpath.string());
         tokenizeFile(p.path());
+        outfile.close();
       }
     }
   }
