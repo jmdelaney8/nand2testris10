@@ -26,5 +26,8 @@
     <ClInclude Include="JackTokenizer.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="JackCompiler.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

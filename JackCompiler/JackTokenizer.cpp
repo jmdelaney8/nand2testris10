@@ -1,8 +1,12 @@
 #include "JackTokenizer.h"
 
+#include<assert.h>
+
+
+const std::string token_types[] = {"keyword", "symbol", "identifier", "integerConstant", "stringConstant"};
 const int n_keywords = 21;
 const std::string keyword_tokens[n_keywords] = {
-  "class", "method", "constructor", "function", "int", "boolean", "char", "void",
+  "class", "method", "function", "constructor", "int", "boolean", "char", "void",
   "var", "static", "field", "let", "do", "if", "else", "while", "return", "true",
   "false", "null", "this"
 };
@@ -24,9 +28,17 @@ bool isKeyword(const std::string& t) {
   return false;
 }
 
+std::string toString(const TokenType& type) {
+  return token_types[(int)type];
+}
+
+std::string toString(const Keyword& keyword) {
+  return keyword_tokens[(int)keyword];
+}
+
 bool Tokenizer::nextIsSpace() {
   int c = file.peek();
-  return c == ' ' || c == '\n';
+  return c == ' ' || c == '\n' || c == '\t';
 }
 
 bool Tokenizer::hasMoreTokens() {
@@ -51,14 +63,14 @@ bool Tokenizer::hasMoreTokens() {
 }
 
 Keyword Tokenizer::keyword() {
-  Keyword keywords[n_keywords] = { Keyword::CLASS, Keyword::METHOD, Keyword::CONSTRUCTOR, Keyword::FUNCTION, Keyword::INT, Keyword::BOOLEAN,
+  Keyword keywords[n_keywords] = { Keyword::CLASS, Keyword::METHOD, Keyword::FUNCTION,  Keyword::CONSTRUCTOR, Keyword::INT, Keyword::BOOLEAN,
                   Keyword::CHAR, Keyword::VOID, Keyword::VAR, Keyword::STATIC, Keyword::FIELD,
                   Keyword::LET, Keyword::DO, Keyword::IF, Keyword::ELSE, Keyword::WHILE, Keyword::RETURN,
                   Keyword::TRUE, Keyword::FALSE, Keyword::_NULL, Keyword::THIS };
   for (int i = 0; i < n_keywords; ++i) {
     if (token == keyword_tokens[i]) return keywords[i];
   }
-  return Keyword::_NULL;
+  assert (false);
 }
 
 char Tokenizer::symbol() {
@@ -70,7 +82,7 @@ std::string Tokenizer::identifier() {
 }
 
 int Tokenizer::intVal() {
-  return (int)token.at(0);
+  return stoi(token);
 }
 
 std::string Tokenizer::stringVal() {
@@ -98,14 +110,28 @@ bool Tokenizer::nextIsComment() {
 
 void Tokenizer::advance() {
   token = "";
-  char c;
-  c = file.get();
-  token.push_back(c);
+  char c0, c;
+  c0 = file.get();
+  // Consume string
+  if (c0 == '\"') {
+    token.push_back(c0);
+    c = file.peek();
+    while (c != '\"') {
+      c = file.get();
+      token.push_back(c);
+      c = file.peek();
+    }
+    c =file.get();
+    token.push_back(c);
+    return;
+  }
+
+  token.push_back(c0);
   // TODO: This can be done cleaner.
-  if (!isSymbol(c)) {
+  if (!isSymbol(c0)) {
     c = file.peek();
     // Read in multicharacter token
-    while (!isSymbol(c) && c != EOF && c != ' ' && c != '\n' && !Tokenizer::nextIsComment()) {
+    while (!isSymbol(c) && c != EOF && !nextIsSpace() && !Tokenizer::nextIsComment()) {
       c = file.get();
       token.push_back(c);
       c = file.peek();
@@ -119,4 +145,30 @@ TokenType Tokenizer::tokenType() {
   if (isdigit(token.at(0))) return TokenType::INT_CONST;
   if (token.at(0) == '\"' || token.at(0) == '\'') return TokenType::STRING_CONST;
   if (isalpha(token.at(0))) return TokenType::IDENTIFIER;
+  else {
+    assert (false);
+  }
+}
+
+std::string Tokenizer::value() {
+  std::string val;
+  switch (tokenType()) {
+    case TokenType::IDENTIFIER:
+      val = identifier();
+      break;
+    case TokenType::INT_CONST:
+      val = std::to_string(intVal());
+      break;
+    case TokenType::KEYWORD:
+      val = toString(keyword());
+      break;
+    case TokenType::STRING_CONST:
+      val = stringVal();
+      val = val.substr(1, val.length() - 2);
+      break;
+    case TokenType::SYMBOL:
+      val.push_back(symbol());
+      break;
+  }
+  return val;
 }

@@ -135,6 +135,7 @@
     <ClCompile Include="JackTokenizer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="JackCompiler.h" />
     <ClInclude Include="JackTokenizer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

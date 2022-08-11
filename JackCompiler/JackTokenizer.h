@@ -11,7 +11,9 @@ enum Keyword {
   WHILE, RETURN, TRUE, FALSE, _NULL, THIS
 };
 
-bool isSymbol(const char& c);
+std::string toString(const TokenType &type);
+std::string toString(const Keyword& keyword);
+
 
 class Tokenizer {
   std::ifstream file;
@@ -33,6 +35,7 @@ public:
   std::string identifier();
   int intVal();
   std::string stringVal();
+  std::string value();
   /*
     Checks if next characters in file are a comment or not. Does not remove comment.
   */
