@@ -150,6 +150,25 @@ TokenType Tokenizer::tokenType() {
   }
 }
 
+std::string escapeXML(const char& val) {
+  char xml_chars[4] = { '<', '>', '&', '\"' };
+  std::string escapes[4] = { "&lt;", "&gt;", "&amp;", "&quot;" };
+  for (int j = 0; j < 4; ++j) {
+    if (val == xml_chars[j]) {
+      return escapes[j];
+    }
+  }
+  return std::string(1, val);
+}
+
+std::string escapeXML(const std::string& val) {
+  std::string out;
+  for (int i = 0; i < val.length(); i++) {
+    out.append(escapeXML(val.at(i)));
+  }
+  return out;
+}
+
 std::string Tokenizer::value() {
   std::string val;
   switch (tokenType()) {
@@ -165,9 +184,11 @@ std::string Tokenizer::value() {
     case TokenType::STRING_CONST:
       val = stringVal();
       val = val.substr(1, val.length() - 2);
+      val = escapeXML(val);
       break;
     case TokenType::SYMBOL:
       val.push_back(symbol());
+      val = escapeXML(val);
       break;
   }
   return val;
