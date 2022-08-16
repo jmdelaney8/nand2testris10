@@ -1,75 +1,54 @@
 #include "JackCompiler.h"
 #include <assert.h>
 
+// All process and compile functions return with the tokenizer on the next token after the function's jurisdiction.
+
 Compiler::Compiler(std::string infile_name, std::string outfile_name) : tokenizer(infile_name) {
   outfile.open(outfile_name);
   advance();
 }
 
 void Compiler::compileClass() {
-  outfile << "<class>" << std::endl;
-  processKeyword();
-  if (!tokenizer.hasMoreTokens()) return;
-  tokenizer.advance();
-  processIdentifier();
-  if (!tokenizer.hasMoreTokens()) return;
-  tokenizer.advance();
-  processSymbol();
-  if (!tokenizer.hasMoreTokens()) return;
-
-  tokenizer.advance();
+  tag("class");
+  processKeyword();  // class
+  processIdentifier();  // className
+  processSymbol();  // {
+  tag("classVarDec");
   while (tokenizer.keyword() == Keyword::STATIC || tokenizer.keyword() == Keyword::FIELD) {
     compileClassVarDec();
-    advance();
   }
+  tag("/classVarDec");
   while (tokenizer.tokenType() == TokenType::KEYWORD && tokenizer.keyword() == Keyword::FUNCTION) {
     compileSubroutine();
-    advance();
   }
-
-  processSymbol();  // }
-  outfile << "</class>" << std::endl;
+  // Don't use function that consumes because it's the end of the file.
+  process("symbol", "}");  // }
+  tag("/class");
 }
 
 void Compiler::compileSubroutine() {
   outfile << "<subroutineDec>" << std::endl;
-  // function
-  processKeyword();
-  advance();
-  // type
-  processKeyword();
-  advance();
-  // identifier
-  processIdentifier();
-  advance();
-  // parameter list
-  processSymbol();
-  outfile << "<parameterList>" << std::endl;
-  advance();
+  processKeyword();  // function
+  processKeyword();  // type
+  processIdentifier();  // function name
+  processSymbol();  // (
+  tag("parameterList");
   while (tokenizer.tokenType() != TokenType::SYMBOL) {
-    // type
-    processKeyword();
-    advance();
-    // identifier
-    processIdentifier();
-    advance();
+    processKeyword();  // type
+    processIdentifier();  // varName
     if (tokenizer.symbol() == ',') {
-      processSymbol();
-      advance();
+      processSymbol();  // ,
     }
   }
-  outfile << "</parameterList>" << std::endl;
-  processSymbol();
-  advance();
+  tag("/parameterList");
+  processSymbol(); // )
   // Body
   outfile << "<subroutineBody>" << std::endl;
   processSymbol();
-  advance();
   // Var decs
   outfile << "<varDec>" << std::endl;
   while (tokenizer.keyword() == Keyword::VAR) {
     compileVarDec();
-    advance();
   }
   outfile << "</varDec>" << std::endl;
   // Statements
@@ -81,34 +60,24 @@ void Compiler::compileSubroutine() {
 }
 
 void Compiler::compileClassVarDec() {
-  outfile << "<classVarDec>" << std::endl;
   processKeyword();  // static | field
-  advance();
   processKeyword();  // type TODO: could this possibly be custom and therefore an identifier?
-  advance();
   processIdentifier();  // varName
-  advance();
   processSymbol();  // ;
-  outfile << "</classVarDec>" << std::endl;
 }
 
 void Compiler::compileVarDec() {
-  process("keyword", "var");
-  advance();
+  processKeyword();  // var
   if (tokenizer.tokenType() == TokenType::KEYWORD) {
     processKeyword();  // type
   }
   else {
     processIdentifier();  // custom type
   }
-  advance();
-  processIdentifier();  // var name
-  advance();
+  processIdentifier();  // varName
   while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
-    processSymbol();
-    advance();
-    processIdentifier();
-    advance();
+    processSymbol();  // ,
+    processIdentifier();  // varName
   }
   processSymbol();  // ;
 }
@@ -141,7 +110,6 @@ void Compiler::compileStatements() {
     else {
       assert(false);
     }
-    advance();
   }
   outfile << "</statements>" << std::endl;
 }
@@ -149,31 +117,16 @@ void Compiler::compileStatements() {
 void Compiler::compileIf() {
   tag("ifStatement");
   processKeyword();  // if
-  advance();
   processSymbol();  // (
-  advance();
   compileExpression();
-  advance();
   processSymbol();  // )
-  advance();
   processSymbol();  // {
-  advance();
   compileStatements();
-  // Don't advance if there were no statements to compile
-  if (tokenizer.tokenType() != TokenType::SYMBOL || tokenizer.symbol() != '}') {
-    advance();
-  }
   processSymbol();  // }
-  advance();
   if (tokenizer.tokenType() == TokenType::KEYWORD && tokenizer.keyword() == Keyword::ELSE) {
     processKeyword(); // else
-    advance();
     processSymbol();  // {
-    advance();
     compileStatements();
-    if (tokenizer.tokenType() != TokenType::SYMBOL || tokenizer.symbol() != '}') {
-      advance();
-    }
     processSymbol(); // }
   }
 
@@ -183,16 +136,11 @@ void Compiler::compileIf() {
 void Compiler::compileWhile() {
   tag("whileStatement");
   processKeyword();  // while
-  advance();
   processSymbol();  // (
-  advance();
   compileExpression();
-  advance();
   processSymbol();  // )
-  advance();
   processSymbol();  // {
   compileStatements();
-  advance();
   processSymbol();  // }
   tag("/whileStatement");
 }
@@ -200,56 +148,36 @@ void Compiler::compileWhile() {
 void Compiler::compileReturn() {
   tag("returnStatement");
   // return
-  processKeyword();
-  advance();
+  processKeyword();  // return
   // assume no expression for now
-  // ;
-  processSymbol();
+  processSymbol();  // ;
   tag("/returnStatement");
 }
 
 void Compiler::compileLet() {
   outfile << "<letStatement>" << std::endl;
-  process("keyword", "let");
-  advance();
-  processIdentifier();
-  advance();
-  processSymbol();
-  advance();
+  processKeyword();  // let
+  processIdentifier();  // varName
+  processSymbol();  // =
   compileExpression();
-  advance();
-  // ;
-  processSymbol();
+  processSymbol();  // ;
   outfile << "</letStatement>" << std::endl;
 }
 
 void Compiler::compileDo() {
   outfile << "<doStatement>" << std::endl;
-  process("keyword", "do");
-  advance();
-  // subroutine call
-  processIdentifier();
-  advance();
-  // either ( or .
-  processSymbol();
-  // compile 'identifier.' structure
+  processKeyword();  // do
+  processIdentifier();  // subroutine name
+  // compile sub class or method calls
   while (tokenizer.symbol() == '.') {
-    advance();
-    processIdentifier();
-    advance();
-    processSymbol();
+    processSymbol();  // .
+    processIdentifier();  // class name | method name
   }
-  advance();
+  processSymbol(); // (
   // parameter list
   compileExpressionList();
-  if (tokenizer.tokenType() != TokenType::SYMBOL) {
-    advance();
-  }
-  // )
-  processSymbol();
-  advance();
-  // ;
-  processSymbol();
+  processSymbol();  // );
+  processSymbol();  // ;
 
   outfile << "</doStatement>" << std::endl;
 
@@ -271,15 +199,18 @@ void Compiler::process(std::string token_type, std::string token) {
 
 void Compiler::processIdentifier() {
   process("identifier", tokenizer.identifier());
+  advance();
 }
 
 
 void Compiler::processSymbol() {
   process("symbol", escapeXML(tokenizer.symbol()));
+  advance();
 }
 
 void Compiler::processKeyword() {
   process("keyword", toString(tokenizer.keyword()));
+  advance();
 }
 
 void Compiler::advance() {
