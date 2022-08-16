@@ -13,12 +13,10 @@ void Compiler::compileClass() {
   processKeyword();  // class
   processIdentifier();  // className
   processSymbol();  // {
-  tag("classVarDec");
   while (tokenizer.keyword() == Keyword::STATIC || tokenizer.keyword() == Keyword::FIELD) {
     compileClassVarDec();
   }
-  tag("/classVarDec");
-  while (tokenizer.tokenType() == TokenType::KEYWORD && tokenizer.keyword() == Keyword::FUNCTION) {
+  while (tokenizer.tokenType() == TokenType::KEYWORD) {
     compileSubroutine();
   }
   // Don't use function that consumes because it's the end of the file.
@@ -27,9 +25,9 @@ void Compiler::compileClass() {
 }
 
 void Compiler::compileSubroutine() {
-  outfile << "<subroutineDec>" << std::endl;
+  tag("subroutineDec");
   processKeyword();  // function
-  processKeyword();  // type
+  compileType();
   processIdentifier();  // function name
   processSymbol();  // (
   tag("parameterList");
@@ -43,37 +41,47 @@ void Compiler::compileSubroutine() {
   tag("/parameterList");
   processSymbol(); // )
   // Body
-  outfile << "<subroutineBody>" << std::endl;
-  processSymbol();
-  // Var decs
-  outfile << "<varDec>" << std::endl;
-  while (tokenizer.keyword() == Keyword::VAR) {
-    compileVarDec();
+  tag("subroutineBody");
+  processSymbol();  // {
+  if (tokenizer.keyword() == Keyword::VAR) {
+    // Var decs
+    while (tokenizer.keyword() == Keyword::VAR) {
+      compileVarDec();
+    }
   }
-  outfile << "</varDec>" << std::endl;
   // Statements
   compileStatements();
   processSymbol();  // }
-  outfile << "</subroutineBody>" << std::endl;
-
-  outfile << "</subroutineDec>" << std::endl;
+  tag("/subroutineBody");;
+  tag("/subroutineDec");;
 }
 
 void Compiler::compileClassVarDec() {
+  tag("classVarDec");
   processKeyword();  // static | field
-  processKeyword();  // type TODO: could this possibly be custom and therefore an identifier?
-  processIdentifier();  // varName
-  processSymbol();  // ;
+  compileType();
+  compileVarNameDec();
+  tag("/classVarDec");
 }
 
 void Compiler::compileVarDec() {
+  tag("varDec");
   processKeyword();  // var
+  compileType();
+  compileVarNameDec(); 
+  tag("/varDec");
+}
+
+void Compiler::compileType() {
   if (tokenizer.tokenType() == TokenType::KEYWORD) {
     processKeyword();  // type
   }
   else {
     processIdentifier();  // custom type
   }
+}
+
+void Compiler::compileVarNameDec() {
   processIdentifier();  // varName
   while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
     processSymbol();  // ,
@@ -84,7 +92,13 @@ void Compiler::compileVarDec() {
 
 int Compiler::compileExpressionList() {
   outfile << "<expressionList>" << std::endl;
-
+  // assume all elements of list are just an identifier
+  while (tokenizer.tokenType() != TokenType::SYMBOL) {
+    compileExpression();
+    if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
+      processSymbol();  // ,
+    }
+  }
   outfile << "</expressionList>" << std::endl;
   return 0;
 }
@@ -149,7 +163,9 @@ void Compiler::compileReturn() {
   tag("returnStatement");
   // return
   processKeyword();  // return
-  // assume no expression for now
+  if (tokenizer.tokenType() != TokenType::SYMBOL) {
+    compileExpression();
+  }
   processSymbol();  // ;
   tag("/returnStatement");
 }
@@ -187,7 +203,12 @@ void Compiler::compileExpression() {
   outfile << "<expression>" << std::endl;
   // Assume we statement is an identifier
   outfile << "<term>" << std::endl;
-  processIdentifier();
+  if (tokenizer.tokenType() == TokenType::KEYWORD) {
+    processKeyword();  // this
+  }
+  else {
+    processIdentifier();  // varName
+  }
   outfile << "</term>" << std::endl;
   outfile << "</expression>" << std::endl;
 }

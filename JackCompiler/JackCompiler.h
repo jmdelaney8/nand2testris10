@@ -14,6 +14,8 @@ class Compiler {
   void processSymbol();
   void processKeyword();
   void tag(std::string);
+  void compileVarNameDec();
+  void compileType();
 public:
   Compiler(std::string infile_name, std::string outfile_name);
   void compileClass();
