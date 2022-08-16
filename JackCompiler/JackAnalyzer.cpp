@@ -3,6 +3,7 @@
 #include <string>
 #include <filesystem>
 #include "JackTokenizer.h"
+#include "JackCompiler.h"
 namespace fs = std::filesystem;
 
 std::ofstream outfile;
@@ -21,6 +22,11 @@ void tokenizeFile(const fs::path& p) {
   outfile << "</tokens>" << std::endl;
 }
 
+void analyzeFile(const fs::path& inpath, const fs::path& outpath) {
+  Compiler compiler(inpath.string(), outpath.string());
+  compiler.compileClass();
+}
+
 int main(int argc, char* argv[]) {
   std::string source = argv[1];
   fs::path path(source);
@@ -32,18 +38,18 @@ int main(int argc, char* argv[]) {
     for (auto& p : path_iter) {
       if (p.is_regular_file() && ".jack" == p.path().extension()) {
         // Create output file
-        fs::path outpath = path.parent_path() / path.stem() / p.path().stem().string().append("T_test.xml");
-        outfile.open(outpath.string());
-        tokenizeFile(p.path());
-        outfile.close();
+        fs::path outpath = path.parent_path() / path.stem() / p.path().stem().string().append("_test.xml");
+        //outfile.open(outpath.string());
+        analyzeFile(p.path(), outpath);
+        //outfile.close();
       }
     }
   }
   else {
     // Create output file
-    fs::path outpath = path.parent_path() / path.stem().string().append("T_test.xml");
-    outfile.open(outpath.string());
-    tokenizeFile(path);
+    fs::path outpath = path.parent_path() / path.stem().string().append("_test.xml");
+    //outfile.open(outpath.string());
+    analyzeFile(path, outpath);
   }
   return 0;
 }

@@ -13,19 +13,18 @@ enum Keyword {
 
 std::string toString(const TokenType &type);
 std::string toString(const Keyword& keyword);
+std::string escapeXML(const char& c);
 
 
 class Tokenizer {
   std::ifstream file;
   std::string token;
-  TokenType token_type;
   bool initialized;
 
 public:
   Tokenizer(std::string filename) {
     file.open(filename);
     token = "";
-    token_type = KEYWORD;
   }
   TokenType tokenType();
   bool hasMoreTokens();

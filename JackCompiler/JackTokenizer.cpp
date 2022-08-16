@@ -102,6 +102,8 @@ std::string Tokenizer::stringVal() {
   return token;
 }
 
+// TODO: Missing checks for /* ... */ style comments.
+
 bool Tokenizer::nextIsSingleComment() {
   int c = file.peek();
   if (c == '/') {

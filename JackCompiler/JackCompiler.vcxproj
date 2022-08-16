@@ -132,6 +132,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="JackAnalyzer.cpp" />
+    <ClCompile Include="JackCompiler.cpp" />
     <ClCompile Include="JackTokenizer.cpp" />
   </ItemGroup>
   <ItemGroup>
