@@ -223,10 +223,20 @@ void Compiler::compileExpression() {
   while (tokenizer.tokenType() != TokenType::SYMBOL || (tokenizer.symbol() != ';'
     && tokenizer.symbol() != ')' && tokenizer.symbol() != ',' && tokenizer.symbol() != ']'))
   {
-    if (tokenizer.tokenType() == TokenType::SYMBOL && isOp(tokenizer.symbol())) {
+    if (tokenizer.tokenType() == TokenType::SYMBOL
+      && isOp(tokenizer.symbol()))
+    {
       //tag("op");
       processSymbol();
       //tag("/op");
+    }
+    else if (tokenizer.tokenType() == TokenType::SYMBOL
+      && tokenizer.symbol() == '~')
+    {
+      tag("term");
+      processSymbol();  // ~
+      compileTerm();
+      tag("/term");
     }
     else {
       compileTerm();
