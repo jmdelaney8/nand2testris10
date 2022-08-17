@@ -43,6 +43,13 @@ void Compiler::compileSubroutine() {
   compileType();
   processIdentifier();  // function name
   processSymbol();  // (
+  compileParameterList();
+  processSymbol(); // )
+  compileSubroutineBody();
+  tag("/subroutineDec");;
+}
+
+void Compiler::compileParameterList() {
   tag("parameterList");
   while (tokenizer.tokenType() != TokenType::SYMBOL) {
     processKeyword();  // type
@@ -52,7 +59,10 @@ void Compiler::compileSubroutine() {
     }
   }
   tag("/parameterList");
-  processSymbol(); // )
+}
+
+
+void Compiler::compileSubroutineBody() {
   // Body
   tag("subroutineBody");
   processSymbol();  // {
@@ -66,7 +76,6 @@ void Compiler::compileSubroutine() {
   compileStatements();
   processSymbol();  // }
   tag("/subroutineBody");;
-  tag("/subroutineDec");;
 }
 
 void Compiler::compileClassVarDec() {
