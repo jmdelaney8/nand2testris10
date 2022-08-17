@@ -16,7 +16,6 @@ class Compiler {
   void tag(std::string);
   void compileVarNameDec();
   void compileType();
-  void compileExpressionComponent();
 public:
   Compiler(std::string infile_name, std::string outfile_name);
   void compileClass();
