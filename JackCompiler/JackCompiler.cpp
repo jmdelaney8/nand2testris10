@@ -2,6 +2,19 @@
 #include <assert.h>
 
 // All process and compile functions return with the tokenizer on the next token after the function's jurisdiction.
+const int num_ops = 9;
+char ops[num_ops] = { '+', '-', '*', '/', '&', '|', '<', '>', '=' };
+
+bool isOp(char symbol) {
+  for (int i = 0; i < num_ops; ++i) {
+    if (ops[i] == symbol) return true;
+  }
+  return false;
+}
+
+bool isUnaryOp(char symbol) {
+  return symbol == '-' || symbol == '~';
+}
 
 Compiler::Compiler(std::string infile_name, std::string outfile_name) : tokenizer(infile_name) {
   outfile.open(outfile_name);
@@ -174,6 +187,10 @@ void Compiler::compileLet() {
   outfile << "<letStatement>" << std::endl;
   processKeyword();  // let
   processIdentifier();  // varName
+  // Process array indexing
+  if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[') {
+    compileExpression();
+  }
   processSymbol();  // =
   compileExpression();
   processSymbol();  // ;
@@ -200,17 +217,81 @@ void Compiler::compileDo() {
 }
 
 void Compiler::compileExpression() {
-  outfile << "<expression>" << std::endl;
-  // Assume we statement is an identifier
-  outfile << "<term>" << std::endl;
-  if (tokenizer.tokenType() == TokenType::KEYWORD) {
-    processKeyword();  // this
+  bool is_wrapped = tokenizer.tokenType() == TokenType::SYMBOL && (tokenizer.symbol() == '(' || tokenizer.symbol() == '[');
+  if (is_wrapped) {
+    processSymbol();  // [ | )
+  }
+  tag("expression");
+  bool is_unary = tokenizer.tokenType() == TokenType::SYMBOL && isUnaryOp(tokenizer.symbol());
+  if (is_unary) {
+    tag("term");
+  }
+  compileExpressionComponent();
+  if (is_unary) {
+    tag("/term");
+  }
+  tag("/expression");
+  if (is_wrapped) {
+    processSymbol();  // ] | )
+  }
+}
+
+void Compiler::compileExpressionComponent() {
+  if (tokenizer.tokenType() == TokenType::SYMBOL && (tokenizer.symbol() == ']' || tokenizer.symbol() == ')'
+    || tokenizer.symbol() == ';'))
+  {
+    return;
+  }
+  if (tokenizer.tokenType() == TokenType::SYMBOL && (tokenizer.symbol() == '(' || tokenizer.symbol() == '[')) {
+    compileExpression();
+    return;
+  }
+  if (tokenizer.tokenType() == TokenType::SYMBOL and isOp(tokenizer.symbol())) {
+    //tag("op");
+    processSymbol();
+    //tag("/op");
+    if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '(') {
+      tag("term");
+      compileExpression();
+      tag("/term");
+    }
+    else {
+      compileExpressionComponent();  // I think we are safe to assume a term follows an op.
+    }
   }
   else {
-    processIdentifier();  // varName
+    tag("term");
+    process(toString(tokenizer.tokenType()), tokenizer.value());
+    advance();
+    // Check to see if the term is a method call
+    if (tokenizer.tokenType() == TokenType::SYMBOL) {
+      if (tokenizer.symbol() == '.') {
+        processSymbol();  // .
+        processIdentifier(); // methodName;
+        processSymbol();  // (
+        compileExpressionList();
+        processSymbol();  // )
+        tag("/term");
+      }
+      else if (tokenizer.symbol() == '(') {  // function call
+        processSymbol();  // (
+        compileExpressionList();
+        processSymbol();  // )
+        tag("/term");
+      }
+      else if (tokenizer.symbol() == '[') { // array index
+        compileExpression();
+        tag("/term");
+      }
+      else if (isOp(tokenizer.symbol())) {
+        tag("/term");
+        compileExpressionComponent();
+      }
+      else {
+        tag("/term");
+      }
+    }
   }
-  outfile << "</term>" << std::endl;
-  outfile << "</expression>" << std::endl;
 }
 
 
