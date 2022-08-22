@@ -22,9 +22,12 @@ Compiler::Compiler(std::string infile_name, std::string outfile_name) : tokenize
 }
 
 void Compiler::compileClass() {
+  // Create class-level symbol table
+  class_table.reset();
   tag("class");
   processKeyword();  // class
-  processIdentifier();  // className
+  std::string name = tokenizer.identifier();
+  processIdentifier(name, "className", 0, "declared");  // className
   processSymbol();  // {
   while (tokenizer.keyword() == Keyword::STATIC || tokenizer.keyword() == Keyword::FIELD) {
     compileClassVarDec();
@@ -38,22 +41,30 @@ void Compiler::compileClass() {
 }
 
 void Compiler::compileSubroutine() {
+  // Initialize local symbol table
+  local_table.reset();
+  if (tokenizer.keyword() == Keyword::METHOD || tokenizer.keyword() == Keyword::CONSTRUCTOR) {
+    local_table.define("this", "className", "arg");
+  }
   tag("subroutineDec");
-  processKeyword();  // function
+  processKeyword();  // function | method | constructor
   compileType();
-  processIdentifier();  // function name
+  processIdentifier(tokenizer.identifier(), "subroutine", 0, "declared");
   processSymbol();  // (
   compileParameterList();
   processSymbol(); // )
   compileSubroutineBody();
-  tag("/subroutineDec");;
+  tag("/subroutineDec");
 }
 
 void Compiler::compileParameterList() {
   tag("parameterList");
   while (tokenizer.tokenType() != TokenType::SYMBOL) {
+    std::string type = toString(tokenizer.keyword());
     processKeyword();  // type
-    processIdentifier();  // varName
+    std::string name = tokenizer.identifier();
+    local_table.define(name, type, "arg");
+    processIdentifier(name, "arg", local_table.indexOf(name), "declared");  // varName
     if (tokenizer.symbol() == ',') {
       processSymbol();  // ,
     }
@@ -75,22 +86,53 @@ void Compiler::compileSubroutineBody() {
   // Statements
   compileStatements();
   processSymbol();  // }
-  tag("/subroutineBody");;
+  tag("/subroutineBody");
 }
 
 void Compiler::compileClassVarDec() {
   tag("classVarDec");
+  Keyword kind_type = tokenizer.keyword();
+  std::string kind;
+  if (kind_type == Keyword::FIELD) {
+    kind = "field";
+  }
+  else {
+    kind = "static";
+  }
+
   processKeyword();  // static | field
+  std::string type = tokenizer.value();
   compileType();
-  compileVarNameDec();
+  // Compile 1 or more var names
+  std::string name = tokenizer.identifier();
+  class_table.define(name, type, kind);
+  processIdentifier(name, kind, class_table.indexOf(name), "declared");  // varName
+  while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
+    processSymbol();  // ,
+    name = tokenizer.identifier();
+    class_table.define(name, type, kind);
+    processIdentifier(name, kind, class_table.indexOf(name), "declared");  // varName
+  }
+  processSymbol();  // ;
   tag("/classVarDec");
 }
 
 void Compiler::compileVarDec() {
   tag("varDec");
   processKeyword();  // var
+  std::string type = tokenizer.value();
   compileType();
-  compileVarNameDec(); 
+  // Compile 1 or more var names
+  std::string name = tokenizer.identifier();
+  local_table.define(name, type, "var");
+  processIdentifier(name, "var", local_table.indexOf(name), "declared");  // varName
+  while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
+    processSymbol();  // ,
+    name = tokenizer.identifier();
+    local_table.define(name, type, "var");
+    processIdentifier(name, "var", local_table.indexOf(name), "declared");  // varName
+  }
+  processSymbol();  // ;
   tag("/varDec");
 }
 
@@ -99,17 +141,9 @@ void Compiler::compileType() {
     processKeyword();  // type
   }
   else {
-    processIdentifier();  // custom type
+    process("identifier", tokenizer.identifier());  // custom type
+    advance();
   }
-}
-
-void Compiler::compileVarNameDec() {
-  processIdentifier();  // varName
-  while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
-    processSymbol();  // ,
-    processIdentifier();  // varName
-  }
-  processSymbol();  // ;
 }
 
 int Compiler::compileExpressionList() {
@@ -195,7 +229,18 @@ void Compiler::compileReturn() {
 void Compiler::compileLet() {
   outfile << "<letStatement>" << std::endl;
   processKeyword();  // let
-  processIdentifier();  // varName
+  std::string name = tokenizer.identifier();
+  std::string kind;
+  int index;
+  if (local_table.kindOf(name) != "none") {
+    kind = local_table.kindOf(name);
+    index = local_table.indexOf(name);
+  }
+  else {
+    kind = class_table.kindOf(name);
+    index = class_table.indexOf(name);
+  }
+  processIdentifier(tokenizer.identifier(), kind, index, "used");  // varName
   // Process array indexing
   if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[') {
     processSymbol();  // [
@@ -212,14 +257,19 @@ void Compiler::compileDo() {
   outfile << "<doStatement>" << std::endl;
   processKeyword();  // do
   // TODO: book recommends compiling the rest as an expression.
-  processIdentifier();  // subroutine name
+  std::string name = tokenizer.identifier();  // function name | class name
+  advance();
   // compile sub class or method calls
-  while (tokenizer.symbol() == '.') {
+  if (tokenizer.symbol() == '.') {
+    processIdentifier(name, "className", 0, "used", false);
     processSymbol();  // .
-    processIdentifier();  // class name | method name
+    processIdentifier(tokenizer.identifier(), "subroutine", 0, "used");  // method name
+  }
+  else {
+    processIdentifier(name, "subroutine", 0, "used", false);  // subroutine name
   }
   processSymbol(); // (
-  // parameter list
+  // argument list
   compileExpressionList();
   processSymbol();  // );
   processSymbol();  // ;
@@ -276,26 +326,50 @@ void Compiler::compileTerm() {
   }
   else {
     // Process term
-    process(toString(tokenizer.tokenType()), tokenizer.value());
-    advance();
-    if (tokenizer.tokenType() == TokenType::SYMBOL) {  // method call
-      if (tokenizer.symbol() == '.') {
+    if (tokenizer.tokenType() == TokenType::IDENTIFIER) {
+      std::string name = tokenizer.identifier();
+      advance();
+      if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '.') {  // method call
+        processIdentifier(name, "className", 0, "used", false);
         processSymbol();  // .
-        processIdentifier(); // methodName;
+        processIdentifier(tokenizer.identifier(), "subroutine", 0, "used"); // methodName;
         processSymbol();  // (
         compileExpressionList();
         processSymbol();  // )
       }
-      else if (tokenizer.symbol() == '(') {  // function call
+      else if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '(') {
+        processIdentifier(name, "subroutine", 0, "used", false);
         processSymbol();  // (
         compileExpressionList();
         processSymbol();  // )
       }
-      else if (tokenizer.symbol() == '[') { // array index
+      else if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[') { // array index
+        SymbolTable* table = NULL;
+        if (local_table.kindOf(name) == "none") {
+          table = &class_table;
+        }
+        else {
+          table = &local_table;
+        }
+        processIdentifier(name, table->kindOf(name), table->indexOf(name), "used", false);
         processSymbol();  // [
         compileExpression();
         processSymbol();  // ]
       }
+      else {
+        SymbolTable* table = NULL;
+        if (local_table.kindOf(name) == "none") {
+          table = &class_table;
+        }
+        else {
+          table = &local_table;
+        }
+        processIdentifier(name, table->kindOf(name), table->indexOf(name), "used", false);
+      }
+    } 
+    else {
+      process(toString(tokenizer.tokenType()), tokenizer.value());
+      advance();
     }
   }
   tag("/term");
@@ -306,9 +380,14 @@ void Compiler::process(std::string token_type, std::string token) {
   outfile << "<" << token_type << "> " << token << " </" << token_type << ">" << std::endl;
 }
 
-void Compiler::processIdentifier() {
-  process("identifier", tokenizer.identifier());
-  advance();
+void Compiler::processIdentifier(const std::string& name, const std::string& category, const int &index,
+  const std::string& usage, bool do_advance)
+{
+  outfile << "<identifier> " << name << " " << category << " " << index << " " << usage
+    << " </identifier>" << std::endl;
+  if (do_advance) {
+    advance();
+  }
 }
 
 
