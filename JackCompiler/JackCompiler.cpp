@@ -211,6 +211,7 @@ void Compiler::compileLet() {
 void Compiler::compileDo() {
   outfile << "<doStatement>" << std::endl;
   processKeyword();  // do
+  // TODO: book recommends compiling the rest as an expression.
   processIdentifier();  // subroutine name
   // compile sub class or method calls
   while (tokenizer.symbol() == '.') {
