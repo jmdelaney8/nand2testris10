@@ -1,13 +1,8 @@
 #include "SymbolTable.h"
 #include <assert.h>
 
-int toIndex(std::string kind) {
-  for (int i = 0; i < n_kinds; ++i) {
-    if (kind == kinds[i]) return i;
-  }
-  assert(false);
-}
 
+const std::string kinds[] = { "static", "field", "arg", "var", "none" };
 
 SymbolTable::SymbolTable() {
   for (int i = 0; i < n_kinds; ++i) {
@@ -22,24 +17,24 @@ void SymbolTable::reset() {
   }
 }
 
-void SymbolTable::define(const std::string& name, const std::string& type, const std::string& kind) {
+void SymbolTable::define(const std::string& name, const std::string& type, const Kind& kind) {
   Symbol symbol;
   symbol.name = name;
   symbol.type = type;
   symbol.kind = kind;
-  symbol.index = indices[toIndex(kind)];
+  symbol.index = indices[(int)kind];
   table[name] = symbol;
-  indices[toIndex(kind)] += 1;
+  indices[(int)kind] += 1;
 }
 
-int SymbolTable::varCount(const std::string& kind) {
-  return indices[toIndex(kind)];
+int SymbolTable::varCount(const Kind& kind) {
+  return indices[(int)kind];
 }
 
-std::string SymbolTable::kindOf(const std::string& name) {
+Kind SymbolTable::kindOf(const std::string& name) {
   auto symbol = table.find(name);
   if (symbol == table.end()) {
-    return "none";
+    return Kind::NONE;
   }
   else {
     return symbol->second.kind;

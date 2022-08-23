@@ -4,19 +4,18 @@
 #include <fstream>
 #include "JackTokenizer.h"
 #include "SymbolTable.h"
+#include "VMWriter.h"
 
 class Compiler {
   std::ofstream outfile;
   Tokenizer tokenizer;
   SymbolTable local_table;
   SymbolTable class_table;
-  void process(std::string token_type, std::string token);
+  VMWriter writer;
+  std::string subroutine_name;
+  std::string current_class;
+  bool is_function;
   void advance();
-  void processIdentifier(const std::string&, const std::string&, const int&, const std::string&, bool do_advance=true);
-  void processSymbol();
-  void processKeyword();
-  void tag(std::string);
-  void compileType();
 public:
   Compiler(std::string infile_name, std::string outfile_name);
   void compileClass();
