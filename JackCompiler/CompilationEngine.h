@@ -14,6 +14,7 @@ class Compiler {
   VMWriter writer;
   std::string subroutine_name;
   std::string current_class;
+  int label_counter;
   bool is_function;
   void advance();
 public:

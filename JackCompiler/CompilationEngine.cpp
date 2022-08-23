@@ -39,7 +39,8 @@ Segment toSegment(Kind kind) {
 Compiler::Compiler(std::string infile_name, std::string outfile_name) :
   tokenizer(infile_name), writer(outfile_name)
 {
-  outfile.open(outfile_name);
+  //outfile.open(outfile_name);
+  label_counter = 0;
   advance();
 }
 
@@ -66,7 +67,7 @@ void Compiler::compileSubroutine() {
   is_function = tokenizer.keyword() != Keyword::METHOD && tokenizer.keyword() != Keyword::CONSTRUCTOR;
   if (!is_function) {
     local_table.define("this", "className", Kind::ARG);
-    outfile << "// added " << this << " to local symbol table" << std::endl;
+    //outfile << "// added " << this << " to local symbol table" << std::endl;
   }
   advance();  // function | method | constructor
   advance();  // type
@@ -84,7 +85,7 @@ void Compiler::compileParameterList() {
     advance();  // type
     std::string name = tokenizer.identifier();
     local_table.define(name, type, Kind::ARG);
-    outfile << "// added " << name << " to class symbol table" << std::endl;
+    //outfile << "// added " << name << " to class symbol table" << std::endl;
     advance();  // varName
     if (tokenizer.symbol() == ',') {
       advance();  // ,
@@ -95,7 +96,7 @@ void Compiler::compileParameterList() {
 
 void Compiler::compileSubroutineBody() {
   advance();  // {
-  if (tokenizer.keyword() == Keyword::VAR) {
+  while (tokenizer.keyword() == Keyword::VAR) {
     // Var decs
     while (tokenizer.keyword() == Keyword::VAR) {
       compileVarDec();
@@ -126,13 +127,13 @@ void Compiler::compileClassVarDec() {
   // Compile 1 or more var names
   std::string name = tokenizer.identifier();
   class_table.define(name, type, kind);
-  outfile << "added " << name << " to class symbol table" << std::endl;
+  //outfile << "added " << name << " to class symbol table" << std::endl;
   advance();  // varName
   while (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == ',') {
     advance();  // ,
     name = tokenizer.identifier();
     class_table.define(name, type, kind);
-    outfile << "// added " << name << " to class symbol table" << std::endl;
+    //outfile << "// added " << name << " to class symbol table" << std::endl;
     advance();  // varName
   }
   advance();  // ;
@@ -192,29 +193,44 @@ void Compiler::compileStatements() {
 }
 
 void Compiler::compileIf() {
+  std::string t = "true" + std::to_string(label_counter);
+  std::string f = "false" + std::to_string(label_counter++);
   advance();  // if
   advance();  // (
   compileExpression();
+  writer.writeArithmetic(Arithmetic::NOT);
+  writer.writeIf(f);
   advance();  // )
   advance();  // {
   compileStatements();
   advance();  // }
+  writer.writeGoto(t);
+  writer.writeLabel(f);
   if (tokenizer.tokenType() == TokenType::KEYWORD && tokenizer.keyword() == Keyword::ELSE) {
     advance(); // else
     advance();  // {
     compileStatements();
     advance(); // }
   }
+  writer.writeLabel(t);
 }
 
 void Compiler::compileWhile() {
   advance();  // while
   advance();  // (
+  std::string loop = "loop" + std::to_string(label_counter);
+  std::string out = "out" + std::to_string(label_counter);
+  label_counter++;
+  writer.writeLabel(loop);
   compileExpression();
   advance();  // )
+  writer.writeArithmetic(Arithmetic::NOT);
+  writer.writeIf(out);
   advance();  // {
   compileStatements();
   advance();  // }
+  writer.writeGoto(loop);
+  writer.writeLabel(out);
 }
 
 void Compiler::compileReturn() {
@@ -245,7 +261,8 @@ void Compiler::compileLet() {
   }
   advance();  // varName
   // Process array indexing
-  if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[') {
+  bool assign_to_array = tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[';
+  if (assign_to_array) {
     advance();  // [
     compileExpression();
     advance();  // ]
@@ -253,10 +270,15 @@ void Compiler::compileLet() {
   advance();  // =
   compileExpression();
   advance();  // ;
-  writer.writePop(Segment::TEMP, 0);  // right side of = expression
-  writer.writePop(Segment::POINTER, 1);  // left hand of = index address
-  writer.writePush(Segment::TEMP, 0);  // put right hand expression on stack
-  writer.writePop(Segment::THAT, 0);  // pop right hand to left hand
+  if (assign_to_array) {
+    writer.writePop(Segment::TEMP, 0);  // right side of = expression
+    writer.writePop(Segment::POINTER, 1);  // left hand of = index address
+    writer.writePush(Segment::TEMP, 0);  // put right hand expression on stack
+    writer.writePop(Segment::THAT, 0);  // pop right hand to left hand
+  }
+  else {
+    writer.writePop(toSegment(kind), index);
+  }
 }
 
 void Compiler::compileDo() {
@@ -271,38 +293,44 @@ void Compiler::compileExpression() {
     && tokenizer.symbol() != ')' && tokenizer.symbol() != ',' && tokenizer.symbol() != ']'))
   {
     if (tokenizer.tokenType() == TokenType::SYMBOL
-      && isArith(tokenizer.symbol()))
+      && tokenizer.symbol() == '-')
     {
-      char op = tokenizer.symbol();
-      advance();  // op
+      advance();  // -
       compileTerm();
-      writer.writeArithmetic(toArith(op));
-    }
-    else if(tokenizer.tokenType() == TokenType::SYMBOL
-      && (tokenizer.symbol() == '*' || tokenizer.symbol() == '/'))
-    {
-      char op = tokenizer.symbol();
-      advance();  // op
-      compileTerm();
-      std::string fname;
-      if (op == '*') {
-        fname = "Math.multiply";
-      }
-      else {
-        fname = "Math.divide";
-      }
-      writer.writeCall(fname, 2);
+      writer.writeArithmetic(Arithmetic::NEG);
     }
     else if (tokenizer.tokenType() == TokenType::SYMBOL
       && tokenizer.symbol() == '~')
     {
-      char op = tokenizer.symbol();
       advance();  // ~
       compileTerm();
       writer.writeArithmetic(Arithmetic::NOT);
     }
     else {
       compileTerm();
+      if (tokenizer.tokenType() == TokenType::SYMBOL
+        && isArith(tokenizer.symbol()))
+      {
+        char op = tokenizer.symbol();
+        advance();  // op
+        compileTerm();
+        writer.writeArithmetic(toArith(op));
+      }
+      else if (tokenizer.tokenType() == TokenType::SYMBOL
+        && (tokenizer.symbol() == '*' || tokenizer.symbol() == '/'))
+      {
+        char op = tokenizer.symbol();
+        advance();  // op
+        compileTerm();
+        std::string fname;
+        if (op == '*') {
+          fname = "Math.multiply";
+        }
+        else {
+          fname = "Math.divide";
+        }
+        writer.writeCall(fname, 2);
+      }
     }
   }
 }
@@ -400,6 +428,18 @@ void Compiler::compileTerm() {
         writer.writeCall("String.appendChar", 1);
       }
     }
+    else if (tokenizer.tokenType() == TokenType::KEYWORD && (tokenizer.keyword() == Keyword::FALSE
+      || tokenizer.keyword() == Keyword::_NULL))
+    {
+      writer.writePush(Segment::CONSTANT, 0);
+      advance();  // false | null
+    }
+    else if(tokenizer.tokenType() == TokenType::KEYWORD && tokenizer.keyword() == Keyword::TRUE) {
+      writer.writePush(Segment::CONSTANT, 1);
+      writer.writeArithmetic(Arithmetic::NEG);
+      advance();  // true;
+    }
+    // TODO: handle this -> output: push pointer 0
     else {
       assert(false);
     }
