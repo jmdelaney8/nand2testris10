@@ -80,7 +80,8 @@ void Compiler::compileSubroutine() {
 
 void Compiler::compileParameterList() {
   while (tokenizer.tokenType() != TokenType::SYMBOL) {
-    std::string type = toString(tokenizer.keyword());
+    // TODO: handle custom type or built in classes
+    std::string type = tokenizer.value();
     advance();  // type
     std::string name = tokenizer.identifier();
     local_table.define(name, type, Kind::ARG);
