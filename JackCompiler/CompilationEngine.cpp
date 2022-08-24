@@ -255,20 +255,23 @@ void Compiler::compileLet() {
   std::string name = tokenizer.identifier();
   Kind kind;
   int index;
+  SymbolTable* table;
   if (local_table.kindOf(name) != Kind::NONE) {
-    kind = local_table.kindOf(name);
-    index = local_table.indexOf(name);
+    table = &local_table;
   }
   else {
-    kind = class_table.kindOf(name);
-    index = class_table.indexOf(name);
+    table = &class_table;
   }
+  kind = table->kindOf(name);
+  index = table->indexOf(name);
   advance();  // varName
   // Process array indexing
   bool assign_to_array = tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[';
   if (assign_to_array) {
     advance();  // [
+    writer.writePush(toSegment(kind), index);
     compileExpression();
+    writer.writeArithmetic(Arithmetic::ADD);
     advance();  // ]
   }
   advance();  // =
@@ -438,7 +441,7 @@ void Compiler::compileTerm() {
       for (int i = 0; i < str.length(); ++i) {
         // TODO: May need to convert to hack char set.
         writer.writePush(Segment::CONSTANT, str[i]);
-        writer.writeCall("String.appendChar", 1);
+        writer.writeCall("String.appendChar", 2);
       }
     }
     else if (tokenizer.tokenType() == TokenType::KEYWORD && (tokenizer.keyword() == Keyword::FALSE
