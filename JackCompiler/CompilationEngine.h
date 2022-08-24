@@ -15,7 +15,7 @@ class Compiler {
   std::string subroutine_name;
   std::string current_class;
   int label_counter;
-  bool is_function;
+  Keyword subroutine_type;
   void advance();
 public:
   Compiler(std::string infile_name, std::string outfile_name);

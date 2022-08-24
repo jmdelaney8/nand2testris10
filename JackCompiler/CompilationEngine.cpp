@@ -64,10 +64,9 @@ void Compiler::compileClass() {
 void Compiler::compileSubroutine() {
   // Initialize local symbol table
   local_table.reset();
-  is_function = tokenizer.keyword() != Keyword::METHOD && tokenizer.keyword() != Keyword::CONSTRUCTOR;
-  if (!is_function) {
+  subroutine_type = tokenizer.keyword();
+  if (subroutine_type == Keyword::METHOD) {
     local_table.define("this", "className", Kind::ARG);
-    //outfile << "// added " << this << " to local symbol table" << std::endl;
   }
   advance();  // function | method | constructor
   advance();  // type
@@ -103,7 +102,12 @@ void Compiler::compileSubroutineBody() {
     }
   }
   writer.writeFunction(current_class + "." + subroutine_name, local_table.varCount(Kind::VAR));
-  if (!is_function) {
+  if (subroutine_type == Keyword::CONSTRUCTOR) {
+    writer.writePush(Segment::CONSTANT, class_table.varCount(Kind::FIELD));
+    writer.writeCall("Memory.alloc", 1);
+    writer.writePop(Segment::POINTER, 0);
+  }
+  if (subroutine_type == Keyword::METHOD) {
     writer.writePush(Segment::ARGUMENT, 0);
     writer.writePop(Segment::POINTER, 0);
   }
@@ -356,6 +360,7 @@ void Compiler::compileTerm() {
       advance();  // varName | className | functionName
       if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '.') {  // method call
         // Put class location on stack.
+        advance();  // .
         bool is_OS_call = (local_table.kindOf(name) == Kind::NONE && class_table.kindOf(name) == Kind::NONE);
         if (!is_OS_call) {
           SymbolTable* table = NULL;
@@ -366,10 +371,12 @@ void Compiler::compileTerm() {
             table = &local_table;
           }
           writer.writePush(toSegment(table->kindOf(name)), table->indexOf(name));
+          name = table->typeOf(name) + "." + tokenizer.identifier(); // full function name
         }
-        advance();  // .
-        name = name + "." + tokenizer.identifier();  // full function name
-        advance(); // methodName;
+        else {
+          name = name + "." + tokenizer.identifier();  // full function name
+        }
+        advance();  // methodName
         advance();  // (
         int n_args = compileExpressionList();  // first arg is class address
         if (!is_OS_call) {
@@ -378,11 +385,17 @@ void Compiler::compileTerm() {
         advance();  // )
         writer.writeCall(name, n_args);
       }
-      else if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '(') {  // function call
+      else if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '(') {  // method call in this class (i think?)
+        //assert(local_table.kindOf("this") != Kind::NONE);
+        //writer.writePush(toSegment(local_table.kindOf("this")), local_table.indexOf("this"));
+        // I think we are safe to push pointer 0 since an unamed method call will only happen within
+        // the same object.
+        writer.writePush(Segment::POINTER, 0);
         advance();  // (
         int n_args = compileExpressionList();
+        n_args++;
         advance();  // )
-        writer.writeCall(name, n_args);
+        writer.writeCall(current_class + "." + name, n_args);
 
       }
       else if (tokenizer.tokenType() == TokenType::SYMBOL && tokenizer.symbol() == '[') { // array index
@@ -438,6 +451,12 @@ void Compiler::compileTerm() {
       writer.writePush(Segment::CONSTANT, 1);
       writer.writeArithmetic(Arithmetic::NEG);
       advance();  // true;
+    }
+    else if (tokenizer.tokenType() == TokenType::KEYWORD
+      && tokenizer.keyword() == Keyword::THIS)
+    {
+      writer.writePush(Segment::POINTER, 0);
+      advance(); // this
     }
     // TODO: handle this -> output: push pointer 0
     else {
